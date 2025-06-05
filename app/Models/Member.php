@@ -78,6 +78,14 @@ class Member extends Model
     }
 
     /**
+     * Get the check-ins of the member.
+     */
+    public function checkins(): HasMany
+    {
+        return $this->hasMany(MemberCheckin::class);
+    }
+
+    /**
      * Filter members by status
      */
     public function scopeWithStatus($query, $status)
