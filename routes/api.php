@@ -6,6 +6,9 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\TrainerController;
+use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\MembershipController;
 
 /*
 |--------------------------------------------------------------------------
@@ -73,5 +76,71 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}/payments', [MemberController::class, 'payments']);
         Route::get('/{id}/membership', [MemberController::class, 'membership']);
         Route::post('/{id}/checkin', [MemberController::class, 'checkin']);
+        Route::get('/{id}/check-ins', [MemberController::class, 'checkInHistory']);
+        Route::get('/{id}/statistics', [MemberController::class, 'statistics']);
+        Route::get('/{id}/sessions', [MemberController::class, 'sessions']);
+    });
+
+    // API cho huấn luyện viên - Quản trị viên và Nhân viên
+    Route::prefix('trainers')->middleware('role:admin,staff,owner')->group(function () {
+        Route::get('/', [TrainerController::class, 'index']);
+        Route::post('/', [TrainerController::class, 'store']);
+        Route::put('/{id}', [TrainerController::class, 'update']);
+        Route::delete('/{id}', [TrainerController::class, 'destroy']);
+    });
+
+    // API cho huấn luyện viên - Tất cả người dùng
+    Route::prefix('trainers')->group(function () {
+        Route::get('/{id}', [TrainerController::class, 'show']);
+        Route::get('/{id}/schedule', [TrainerController::class, 'schedule']);
+        Route::get('/{id}/reviews', [TrainerController::class, 'reviews']);
+        Route::post('/{id}/reviews', [TrainerController::class, 'addReview']);
+        Route::get('/{id}/statistics', [TrainerController::class, 'statistics']);
+    });
+
+    // API cho lịch trình - Quản trị viên và Nhân viên
+    Route::prefix('schedules')->middleware('role:admin,staff,owner')->group(function () {
+        Route::post('/', [ScheduleController::class, 'store']);
+        Route::put('/{id}', [ScheduleController::class, 'update']);
+        Route::delete('/{id}', [ScheduleController::class, 'destroy']);
+        Route::patch('/{id}/status', [ScheduleController::class, 'updateStatus']);
+    });
+
+    // API cho lịch trình - Tất cả người dùng
+    Route::prefix('schedules')->group(function () {
+        Route::get('/', [ScheduleController::class, 'index']);
+        Route::get('/{id}', [ScheduleController::class, 'show']);
+        Route::get('/available-slots', [ScheduleController::class, 'availableSlots']);
+        Route::get('/statistics', [ScheduleController::class, 'statistics']);
+    });
+
+    // API cho sessions (alias for schedules)
+    Route::prefix('sessions')->group(function () {
+        Route::get('/', [ScheduleController::class, 'index']);
+        Route::get('/{id}', [ScheduleController::class, 'show']);
+        
+        Route::middleware('role:admin,staff,owner')->group(function () {
+            Route::post('/', [ScheduleController::class, 'store']);
+            Route::put('/{id}', [ScheduleController::class, 'update']);
+            Route::delete('/{id}', [ScheduleController::class, 'destroy']);
+        });
+    });
+
+    // API cho gói thành viên - Quản trị viên và Nhân viên
+    Route::prefix('memberships')->middleware('role:admin,staff,owner')->group(function () {
+        Route::get('/', [MembershipController::class, 'index']);
+        Route::post('/', [MembershipController::class, 'store']);
+        Route::put('/{id}', [MembershipController::class, 'update']);
+        Route::delete('/{id}', [MembershipController::class, 'destroy']);
+        Route::post('/assign', [MembershipController::class, 'assignToMember']);
+        Route::post('/renew/{memberId}', [MembershipController::class, 'renewMembership']);
+        Route::post('/{id}/freeze', [MembershipController::class, 'freezeMembership']);
+        Route::post('/{id}/cancel', [MembershipController::class, 'cancelMembership']);
+        Route::get('/statistics', [MembershipController::class, 'statistics']);
+    });
+
+    // API cho gói thành viên - Tất cả người dùng
+    Route::prefix('memberships')->group(function () {
+        Route::get('/{id}', [MembershipController::class, 'show']);
     });
 }); 

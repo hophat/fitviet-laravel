@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Member;
 use App\Models\Order;
 use App\Models\Membership;
+use App\Models\MemberCheckin;
+use App\Models\Schedule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -293,6 +295,210 @@ class MemberController extends Controller
                 'checkin_time' => $request->check_in_time,
                 'notes' => $request->notes,
             ]
+        ]);
+    }
+
+    /**
+     * Get check-in history for a member
+     */
+    public function checkInHistory($id, Request $request)
+    {
+        $member = Member::findOrFail($id);
+        
+        $query = MemberCheckin::where('member_id', $id);
+        
+        // Filter by date range
+        if ($request->has('start_date')) {
+            $query->where('checkin_time', '>=', $request->start_date);
+        }
+        if ($request->has('end_date')) {
+            $query->where('checkin_time', '<=', $request->end_date);
+        }
+        
+        // Sorting
+        $sortBy = $request->get('sort_by', 'checkin_time');
+        $sortOrder = $request->get('sort_order', 'desc');
+        $query->orderBy($sortBy, $sortOrder);
+        
+        // Pagination
+        $perPage = $request->get('per_page', 20);
+        $checkIns = $query->paginate($perPage);
+        
+        return response()->json([
+            'data' => $checkIns,
+            'summary' => [
+                'total_checkins' => $member->checkins()->count(),
+                'this_month' => $member->checkins()->thisMonth()->count(),
+                'this_week' => $member->checkins()->thisWeek()->count(),
+                'today' => $member->checkins()->today()->count(),
+            ]
+        ]);
+    }
+
+    /**
+     * Get member statistics
+     */
+    public function statistics($id)
+    {
+        $member = Member::findOrFail($id);
+        
+        // Check-in statistics
+        $totalCheckins = $member->checkins()->count();
+        $thisMonthCheckins = $member->checkins()->thisMonth()->count();
+        $thisWeekCheckins = $member->checkins()->thisWeek()->count();
+        $todayCheckins = $member->checkins()->today()->count();
+        
+        // Average check-ins per week (last 3 months)
+        $threeMonthsAgo = now()->subMonths(3);
+        $checkinsLast3Months = $member->checkins()
+            ->where('checkin_time', '>=', $threeMonthsAgo)
+            ->count();
+        $weeksIn3Months = 12;
+        $avgCheckinsPerWeek = round($checkinsLast3Months / $weeksIn3Months, 1);
+        
+        // Order statistics
+        $totalOrders = $member->orders()->count();
+        $totalSpent = $member->orders()
+            ->where('payment_status', 'paid')
+            ->sum('total');
+        $thisMonthSpent = $member->orders()
+            ->where('payment_status', 'paid')
+            ->whereMonth('created_at', now()->month)
+            ->whereYear('created_at', now()->year)
+            ->sum('total');
+        
+        // Session statistics
+        $totalSessions = $member->schedules()->count();
+        $completedSessions = $member->schedules()
+            ->where('status', 'completed')
+            ->count();
+        $upcomingSessions = $member->schedules()
+            ->where('status', 'scheduled')
+            ->where('start_time', '>', now())
+            ->count();
+        
+        // PT sessions
+        $totalPTSessions = $member->schedules()
+            ->where('type', 'pt')
+            ->count();
+        $completedPTSessions = $member->schedules()
+            ->where('type', 'pt')
+            ->where('status', 'completed')
+            ->count();
+        
+        // Class attendance
+        $totalClasses = $member->schedules()
+            ->where('type', 'class')
+            ->count();
+        $completedClasses = $member->schedules()
+            ->where('type', 'class')
+            ->where('status', 'completed')
+            ->count();
+        
+        // Membership info
+        $activeMembership = $member->memberships()
+            ->where('end_date', '>=', now())
+            ->where('member_memberships.status', 'active')
+            ->first();
+        
+        $membershipDaysRemaining = 0;
+        if ($activeMembership) {
+            $membershipDaysRemaining = now()->diffInDays($activeMembership->pivot->end_date);
+        }
+        
+        return response()->json([
+            'data' => [
+                'check_ins' => [
+                    'total' => $totalCheckins,
+                    'this_month' => $thisMonthCheckins,
+                    'this_week' => $thisWeekCheckins,
+                    'today' => $todayCheckins,
+                    'avg_per_week' => $avgCheckinsPerWeek,
+                ],
+                'orders' => [
+                    'total_orders' => $totalOrders,
+                    'total_spent' => $totalSpent,
+                    'this_month_spent' => $thisMonthSpent,
+                ],
+                'sessions' => [
+                    'total' => $totalSessions,
+                    'completed' => $completedSessions,
+                    'upcoming' => $upcomingSessions,
+                    'pt_sessions' => [
+                        'total' => $totalPTSessions,
+                        'completed' => $completedPTSessions,
+                    ],
+                    'classes' => [
+                        'total' => $totalClasses,
+                        'completed' => $completedClasses,
+                    ],
+                ],
+                'membership' => [
+                    'active' => $activeMembership ? true : false,
+                    'days_remaining' => $membershipDaysRemaining,
+                    'membership_name' => $activeMembership ? $activeMembership->name : null,
+                ],
+                'member_since' => $member->created_at->format('Y-m-d'),
+                'member_days' => $member->created_at->diffInDays(now()),
+            ]
+        ]);
+    }
+
+    /**
+     * Get member's sessions/schedules
+     */
+    public function sessions($id, Request $request)
+    {
+        $member = Member::findOrFail($id);
+        
+        $query = Schedule::where('member_id', $id)
+            ->with(['trainer']);
+        
+        // Filter by date range
+        if ($request->has('start_date')) {
+            $query->where('start_time', '>=', $request->start_date);
+        }
+        if ($request->has('end_date')) {
+            $query->where('end_time', '<=', $request->end_date);
+        }
+        
+        // Filter by status
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+        
+        // Filter by type
+        if ($request->has('type')) {
+            $query->where('type', $request->type);
+        }
+        
+        // Sorting
+        $sortBy = $request->get('sort_by', 'start_time');
+        $sortOrder = $request->get('sort_order', 'desc');
+        $query->orderBy($sortBy, $sortOrder);
+        
+        // Get data based on view type
+        if ($request->get('view') === 'calendar') {
+            $sessions = $query->get()->map(function ($session) {
+                return [
+                    'id' => $session->id,
+                    'title' => $session->title,
+                    'start' => $session->start_time,
+                    'end' => $session->end_time,
+                    'type' => $session->type,
+                    'status' => $session->status,
+                    'trainer' => $session->trainer ? $session->trainer->name : null,
+                    'location' => $session->location,
+                    'notes' => $session->notes,
+                ];
+            });
+        } else {
+            $perPage = $request->get('per_page', 10);
+            $sessions = $query->paginate($perPage);
+        }
+        
+        return response()->json([
+            'data' => $sessions
         ]);
     }
 } 

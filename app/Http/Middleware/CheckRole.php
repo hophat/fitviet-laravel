@@ -16,13 +16,13 @@ class CheckRole
     public function handle(Request $request, Closure $next, ...$roles): Response
     {
         if (!$request->user()) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
+            return response()->json(['message' => 'Unauthenticated'], 401);
         }
 
-        if (empty($roles) || in_array($request->user()->role, $roles)) {
-            return $next($request);
+        if (!in_array($request->user()->role, $roles)) {
+            return response()->json(['message' => 'Unauthorized. You do not have permission to access this resource.'], 403);
         }
 
-        return response()->json(['message' => 'Không có quyền truy cập.'], 403);
+        return $next($request);
     }
 }

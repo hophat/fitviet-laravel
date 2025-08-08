@@ -461,7 +461,7 @@ import { PlusOutlined, LeftOutlined, RightOutlined, MoreOutlined, CalendarOutlin
 import { useMemberStore } from '@/stores/member';
 import { useSessionStore } from '@/stores/session';
 import { useUtils } from '@/composables/utils';
-import MainLayout from '@/components/MainLayout.vue';
+import MainLayout from '../../layouts/MainLayout.vue';
 
 const router = useRouter();
 const memberStore = useMemberStore();
